@@ -60,7 +60,8 @@ my $now = DateTime->now( time_zone => 'local' );
 system('fs_cli -x \'perlrun /etc/freeswitch/scripts/probe.pl moh@' .
        $destip . ':5080\' >/dev/null');
 
-wait();
+waitpid($remotepid, 0);
+waitpid($localpid, 0);
 
 my %results =
     (
@@ -75,10 +76,10 @@ my $fh = IO::File->new($remote_file) or
 while(my $line = $fh->getline())
 {
     $line =~ s/^\s+//;
+    my @parts = split(/\s+/, $line);
     
-    if( index($line, $localip) == 0 )
+    if( $parts[0] eq $localip )
     {
-        my @parts = split(/\s+/, $line);
         $results{'remote_packets'} = $parts[8];
         $results{'remote_lost'} = $parts[9];
         $results{'remote_max_jitter'} = $parts[12];
@@ -96,10 +97,10 @@ $fh = IO::File->new($local_file) or
 while(my $line = $fh->getline())
 {
     $line =~ s/^\s+//;
+    my @parts = split(/\s+/, $line);
     
-    if( index($line, $destip) == 0 )
+    if( $parts[0] eq $destip )
     {
-        my @parts = split(/\s+/, $line);
         $results{'local_packets'} = $parts[8];
         $results{'local_lost'} = $parts[9];
         $results{'local_max_jitter'} = $parts[12];
@@ -114,6 +115,8 @@ $fh->close;
 unlink $remote_file;
 unlink $local_file;
 
+#print "Wrote $remote_file $local_file\n";
+#print Dumper(\%results);
 
 my @columns =
     (
@@ -155,6 +158,8 @@ foreach my $col (@columns)
 $fh->print(join(',', @res) . "\n");
 
 $fh->close;
+
+#print(join(',', @res) . "\n");
 
 1;
 
