@@ -1,0 +1,168 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Net::Address::IP::Local;
+use File::Temp qw(tmpnam);
+use IO::File;
+use DateTime;
+use Data::Dumper;
+
+my $destip;
+
+
+my $ok = GetOptions(
+    'dest=s' => \$destip,
+    );
+
+
+if( not $ok or not $destip or scalar(@ARGV) > 0 or $destip !~ /^[0-9.]+$/ )
+{
+    print STDERR "Usage: $0 --dest=IPADDR\n",
+    "Options:\n",
+    "  --dest=IPADDR   other end probe address\n";
+    exit(1);
+}
+
+my $localip = Net::Address::IP::Local->public_ipv4();
+
+my $remote_file = tmpnam();
+
+my $remotepid = fork();
+if( $remotepid == 0 )
+{
+    system(
+        'ssh' .
+        ' -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' .
+        ' root@' . $destip .
+        ' tshark -z rtp,streams -q -a duration:40 ip host ' . $localip .
+        ' >' . $remote_file . ' 2>/dev/null');
+    exit(0);
+}
+
+my $local_file = tmpnam();
+    
+my $localpid = fork();
+if( $localpid == 0 )
+{
+    system(
+        'tshark -z rtp,streams -q -a duration:40 ip host ' . $destip .
+        ' >' . $local_file . ' 2>/dev/null');
+    exit(0);
+}
+
+sleep(2);
+
+my $now = DateTime->now( time_zone => 'local' );
+
+system('fs_cli -x \'perlrun /etc/freeswitch/scripts/probe.pl moh@' .
+       $destip . ':5080\' >/dev/null');
+
+wait();
+
+my %results =
+    (
+     'date' => $now->ymd,
+     'time' => $now->hms,
+    );
+
+
+my $fh = IO::File->new($remote_file) or
+    die("Failed opening $remote_file : $!");
+
+while(my $line = $fh->getline())
+{
+    $line =~ s/^\s+//;
+    
+    if( index($line, $localip) == 0 )
+    {
+        my @parts = split(/\s+/, $line);
+        $results{'remote_packets'} = $parts[8];
+        $results{'remote_lost'} = $parts[9];
+        $results{'remote_max_jitter'} = $parts[12];
+        $results{'remote_avg_jitter'} = $parts[13];
+        
+        last;
+    }
+}
+
+$fh->close;
+
+$fh = IO::File->new($local_file) or
+    die("Failed opening $local_file : $!");
+
+while(my $line = $fh->getline())
+{
+    $line =~ s/^\s+//;
+    
+    if( index($line, $destip) == 0 )
+    {
+        my @parts = split(/\s+/, $line);
+        $results{'local_packets'} = $parts[8];
+        $results{'local_lost'} = $parts[9];
+        $results{'local_max_jitter'} = $parts[12];
+        $results{'local_avg_jitter'} = $parts[13];
+        
+        last;
+    }
+}
+
+$fh->close;
+
+unlink $remote_file;
+unlink $local_file;
+
+
+my @columns =
+    (
+     'date',
+     'time',
+     'remote_packets',
+     'remote_lost',
+     'remote_max_jitter',
+     'remote_avg_jitter',
+     'local_packets',
+     'local_lost',
+     'local_max_jitter',
+     'local_avg_jitter',
+    );
+     
+
+my $statfile =
+    '/var/local/voip_probe/reports/' . $localip . '_' . $destip .
+    '_' . $now->strftime('%Y%m%d');
+
+my $printhead = (-f $statfile) ? 0:1;
+
+$fh = IO::File->new($statfile, 'a') or
+    die("Failed to open $statfile for writing: $!");
+
+if( $printhead )
+{
+    $fh->print(join(',', @columns) . "\n");
+}
+
+my @res;
+foreach my $col (@columns)
+{
+    my $val = $results{$col};
+    $val = '' unless defined($val);
+    push(@res, $val);
+}
+
+$fh->print(join(',', @res) . "\n");
+
+$fh->close;
+
+1;
+
+
+
+
+
+
+
+
+
