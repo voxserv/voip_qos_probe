@@ -37,7 +37,7 @@ if( $remotepid == 0 )
         'ssh' .
         ' -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' .
         ' root@' . $destip .
-        ' tshark -z rtp,streams -q -a duration:40 ip host ' . $localip .
+        ' tshark -p -z rtp,streams -q -a duration:40 ip host ' . $localip .
         ' >' . $remote_file . ' 2>/dev/null');
     exit(0);
 }
@@ -48,7 +48,7 @@ my $localpid = fork();
 if( $localpid == 0 )
 {
     system(
-        'tshark -z rtp,streams -q -a duration:40 ip host ' . $destip .
+        'tshark -p -z rtp,streams -q -a duration:40 ip host ' . $destip .
         ' >' . $local_file . ' 2>/dev/null');
     exit(0);
 }
