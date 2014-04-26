@@ -7,9 +7,12 @@ scripts that I built when we needed to measure end-to-end QoS for voice
 communication. The same setup is used on the probe computers on both
 sides. The test script starts a 30-second SIP call between ports 5080 on
 each side and plays MOH in both directions. Few seconds before the call,
-tshark is starte don both ends, so that RTP stream quality is analyzed
+tshark is started on both ends, so that RTP stream quality is analyzed
 and printed at the end of the call. The results are then stored in a CSV
 file in "/var/local/voip_probe/reports" directory.
+
+The resulting report contains jitter and packet loss statistics for both
+ends of the call (on receiving side).
 
 Also a tcpdump process is permanently running on every probe and stores
 the SIP and RTP packet content on the disk.
