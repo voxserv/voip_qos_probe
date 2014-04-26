@@ -1,64 +1,199 @@
-Minimal FreeSWITCH configuration
-================================
+Voice quality probe for end-to-end measurement of jitter and packet loss
+========================================================================
 
-This is a minimalistic FreeSWITCH configuration. It does not do anyting,
-yet it allows starting the FreeSWITCH daemon and connecting to its
-console with fs_cli.
+This is a clone of minimal FreeSWITCH configuration
+[[https://github.com/xlab1/freeswitch_conf_minimal]] and a few
+additional scripts that I built when we needed to measure end-to-end QoS
+for voice communication. The same setup is used on the probe computers
+on both sides. The test script starts a 30-second SIP call between ports
+5080 on each side and plays MOH in both directions. Few seconds before
+the call, tshark is starte don both ends, so that RTP stream quality is
+analyzed and printed at the end of the call. The results are then stored
+in a CSV file in "/var/local/voip_probe/reports" directory.
 
-The purpose of this configuration is to provide a base for new projects,
-so that you don't have to clean up the vanilla configuration from
-unneeded features.
+Also a tcpdump process is permanently running on every probe and stores
+the SIP and RTP packet content on the disk.
 
-Tested on Debian with packages from [http://files.freeswitch.org],
-FreeSWITCH version 1.2.13 (it should work also with any other FreeSWITCH
-version).
+Anonymous FTP server is enabled on the probe, so that reports and packet
+captures can be easily downloaded.
+
+You can set up as many probes as needed with the same installation
+sequence, and set up the calls between them in cron jobs. "simple-cdd"
+package allows to automate the installation, so that it's replicated on
+multiple computers.
+
+Old Intel Atom netbooks can be used as probes, or also PC Engines' new
+APU platform [[https://github.com/ssinyagin/pcengines-apu-debian-cd]].
+
+This installation is tested with Debian Wheezy, and should also work
+with Debian Squeeze or Ubuntu.
+
+You need to make sure that root user on every probe can login as root on
+the probe on the other end of a call with SSH public key, and the public
+key should have empty passphrase. The test script executes tshark on the
+far end via SSH. The easiest way is to distribute the same set of
+private and public keys and authorized_keys among all probes in the
+test.
 
 
-Usage if you do everethyng as root:
------------------------------------
+
+Installation procedure (Debian Wheezy)
+--------------------------------------
+
+# required packages
+
+apt-get update
+apt-get install -y \
+ntp curl git tshark tcpdump vsftpd \
+libnet-address-ip-local-perl libdatetime-perl
+
+# install FreeSWITCH from packages
+
+cat >/etc/apt/sources.list.d/freeswitch.list <<EOT
+deb http://files.freeswitch.org/repo/deb/debian/ wheezy main
+EOT
+
+curl http://files.freeswitch.org/repo/deb/debian/freeswitch_archive_g0.pub | \
+apt-key add -
+
+apt-get update
+apt-get install -y freeswitch-meta-all 
+
+# install the probe
+
 cd /etc
-git clone https://github.com/xlab1/freeswitch_conf_minimal.git freeswitch
+git clone https://github.com/xlab1/voip_qos_probe.git freeswitch
+
+insserv freeswitch
+service freeswitch start
+
+# reports and packet captures will be stored here
+
+mkdir /var/local/voip_probe
+mkdir /var/local/voip_probe/reports
+mkdir /var/local/voip_probe/pcap
+
+# packet capture and the startup script for it
+
+cat >/usr/local/sbin/start_voip_sniffer <<'EOF'
+#!/bin/sh
+/usr/sbin/tcpdump -i eth0 -p -s0 \
+    -G 3600 -w /var/local/voip_probe/pcap/voip-%F--%H-%M-%S.pcap \
+    udp port 5080 or udp port 5060 or udp portrange 16384-32767
+EOF
+
+chmod 744 /usr/local/sbin/start_voip_sniffer
+
+cat >/etc/init.d/voip_sniffer <<'EOF'
+#!/bin/sh
+#
+
+### BEGIN INIT INFO
+# Provides:          voip_sniffer
+# Required-Start:    $local_fs $remote_fs $network $syslog
+# Required-Stop:     $local_fs $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      
+# Short-Description: tcpdump for UDP packets
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON="/usr/local/sbin/start_voip_sniffer"
+DESC="tcpdump for UDP packets"
+VERBOSE=yes
+
+# Load the VERBOSE setting and other rcS variables
+. /lib/init/vars.sh
+
+# Define LSB log_* functions.
+. /lib/lsb/init-functions
+
+OPTIONS=""
+
+do_start()
+{
+        start-stop-daemon --start --background \
+                --name voip_sniffer --exec $DAEMON \
+                || return 1
+}
+
+case "$1" in
+  start)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
+        do_start
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  stop)
+        echo not supported
+        ;;
+esac
+
+exit 0
+EOF
+
+chmod 744 /etc/init.d/voip_sniffer
+insserv voip_sniffer
+service voip_sniffer start
 
 
-Usage if you work as multiple non-root users:
----------------------------------------------
-echo "umask 0007" >>~/.profile 
-umask 0007
-sudo adduser jsmith freeswitch
-sudo mkdir /etc/freeswitch
-sudo chgrp freeswitch /etc/freeswitch
-sudo chmod g+ws /etc/freeswitch
-cd /etc/freeswitch
-git init --shared=0660
-git pull https://github.com/xlab1/freeswitch_conf_minimal.git master
+# install SSH keys for root
+
+mkdir /root/.ssh/
+chmod 700 /root/.ssh/
+
+cat >/root/.ssh/id_rsa <<EOT
+-----BEGIN RSA PRIVATE KEY-----
+some key goes here
+-----END RSA PRIVATE KEY-----
+EOT
+
+chmod 600 /root/.ssh/id_rsa
+
+cat >/root/.ssh/id_rsa.pub <<EOT
+some other key goes here
+EOT
+
+cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+
+# point anonymous FTP directory to our reports
+
+cat >>/etc/vsftpd.conf <<EOT
+#
+anon_root=/var/local/voip_probe
+EOT
+
+service vsftpd restart
+
+# You probably need to adapt /etc/ntp.conf if it's a closed corporate
+# environment
+
+
+# Try the test call. Use fs_cli on both ends to see the debug output and
+# call progress
+
+fs_cli -x 'perlrun /etc/freeswitch/scripts/probe.pl moh@192.168.1.133:5080'
+
+# Try the test script. The results will be shown in a new CSV file in
+# /var/local/voip_probe/reports
+
+/etc/freeswitch/scripts/run_test --dest=192.168.1.133
+
+# If everything went fine, install the cron jobs
+
+cat >/etc/cron.d/voip_probe <<'EOF'
+0 0 * * * root find /var/local/voip_probe/pcap -type f -mtime +14 -exec rm '{}' ';'
+2-52/10 * * * * root /etc/freeswitch/scripts/run_test --dest=192.168.1.133
+EOF
 
 
 
 
 
-Further on, you may want to set up your own project-specific Git
-repository and push new changes to it.
-
-The following files are empty and are placed there to keep the XML
-preprocessor happy. Feel free to delete them after placing your own XML
-files:
-
-directory/stub.xml
-ivr_menus/stub.xml
-lang/en/ivr/stub.xml
-sip_profiles/external/stub.xml
-sip_profiles/internal/stub.xml
-
-
-The SIP profiles are modified to allow multiple domains, as described in
-http://wiki.freeswitch.org/wiki/Multi-tenant
-
-
-autoload_configs/local_stream.conf.xml
-is modified to match the MOH paths in Debian packages
-
-autoload_configs/logfile.conf.xml
-logfile rotation is enabled, debug loglevel is disabled
 
 Stanislav Sinyagin
 ssinyagin@k-open.com
