@@ -2,14 +2,14 @@ Voice quality probe for end-to-end measurement of jitter and packet loss
 ========================================================================
 
 This is a clone of minimal FreeSWITCH configuration
-[[https://github.com/xlab1/freeswitch_conf_minimal]] and a few
-additional scripts that I built when we needed to measure end-to-end QoS
-for voice communication. The same setup is used on the probe computers
-on both sides. The test script starts a 30-second SIP call between ports
-5080 on each side and plays MOH in both directions. Few seconds before
-the call, tshark is starte don both ends, so that RTP stream quality is
-analyzed and printed at the end of the call. The results are then stored
-in a CSV file in "/var/local/voip_probe/reports" directory.
+(https://github.com/xlab1/freeswitch_conf_minimal) and a few additional
+scripts that I built when we needed to measure end-to-end QoS for voice
+communication. The same setup is used on the probe computers on both
+sides. The test script starts a 30-second SIP call between ports 5080 on
+each side and plays MOH in both directions. Few seconds before the call,
+tshark is starte don both ends, so that RTP stream quality is analyzed
+and printed at the end of the call. The results are then stored in a CSV
+file in "/var/local/voip_probe/reports" directory.
 
 Also a tcpdump process is permanently running on every probe and stores
 the SIP and RTP packet content on the disk.
@@ -23,7 +23,7 @@ package allows to automate the installation, so that it's replicated on
 multiple computers.
 
 Old Intel Atom netbooks can be used as probes, or also PC Engines' new
-APU platform [[https://github.com/ssinyagin/pcengines-apu-debian-cd]].
+APU platform (https://github.com/ssinyagin/pcengines-apu-debian-cd).
 
 This installation is tested with Debian Wheezy, and should also work
 with Debian Squeeze or Ubuntu.
@@ -193,9 +193,11 @@ EOF
 
 
 
-
+AUTHOR
+------
 
 Stanislav Sinyagin
 ssinyagin@k-open.com
+http://www.voxserv.ch/
 
 
