@@ -14,6 +14,10 @@ file in "/var/local/voip_probe/reports" directory.
 The resulting report contains jitter and packet loss statistics for both
 ends of the call (on receiving side).
 
+WARNING: the test script assumes that there is no NAT between the
+probes. In case of NAT, far-end statistics will not be properly
+displayed.
+
 Also a tcpdump process is permanently running on every probe and stores
 the SIP and RTP packet content on the disk.
 
