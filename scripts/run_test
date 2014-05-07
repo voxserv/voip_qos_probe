@@ -33,12 +33,24 @@ my $remote_file = tmpnam();
 my $remotepid = fork();
 if( $remotepid == 0 )
 {
-    system(
+    my $sshcmd =
         'ssh' .
         ' -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' .
-        ' root@' . $destip .
-        ' tshark -p -z rtp,streams -q -a duration:40 ip host ' . $localip .
-        ' >' . $remote_file . ' 2>/dev/null');
+        ' root@' . $destip . ' ';
+    
+    my $dumpfile = '/tmp/' . $localip . '_' . time();
+    
+    system($sshcmd .
+           'timeout 40 /usr/sbin/tcpdump -p -q -w ' . $dumpfile .
+           ' ip host ' . $localip . ' 2>/dev/null');
+    
+    system($sshcmd .
+           'nice tshark -r ' . $dumpfile . ' -z rtp,streams -q >' .
+           $remote_file . ' 2>/dev/null');
+
+    system($sshcmd .
+           'rm -f ' . $dumpfile . ' 2>/dev/null');
+    
     exit(0);
 }
 
@@ -47,9 +59,16 @@ my $local_file = tmpnam();
 my $localpid = fork();
 if( $localpid == 0 )
 {
-    system(
-        'tshark -p -z rtp,streams -q -a duration:40 ip host ' . $destip .
-        ' >' . $local_file . ' 2>/dev/null');
+    my $dumpfile = '/tmp/' . $destip . '_' . time();
+    
+    system('timeout 40 /usr/sbin/tcpdump -p -q -w ' . $dumpfile .
+           ' ip host ' . $destip . ' 2>/dev/null');
+    
+    system('nice tshark -r ' . $dumpfile . ' -z rtp,streams -q >' .
+           $local_file . ' 2>/dev/null');
+
+    unlink $dumpfile;
+
     exit(0);
 }
 
