@@ -11,10 +11,12 @@ use DateTime;
 use Data::Dumper;
 
 my $destip;
+my $localip = Net::Address::IP::Local->public_ipv4();
 
 
 my $ok = GetOptions(
     'dest=s' => \$destip,
+    'local=s' => \$localip,
     );
 
 
@@ -22,11 +24,12 @@ if( not $ok or not $destip or scalar(@ARGV) > 0 or $destip !~ /^[0-9.]+$/ )
 {
     print STDERR "Usage: $0 --dest=IPADDR\n",
     "Options:\n",
-    "  --dest=IPADDR   other end probe address\n";
+    "  --dest=IPADDR   other end probe address\n",
+    "  --local=IPADDR  [" . $localip .
+        "] local IP addr as seen from remote server\n";
     exit(1);
 }
 
-my $localip = Net::Address::IP::Local->public_ipv4();
 
 my $remote_file = tmpnam();
 
