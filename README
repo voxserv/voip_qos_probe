@@ -2,7 +2,7 @@ Voice quality probe for end-to-end measurement of jitter and packet loss
 ========================================================================
 
 This is a clone of minimal FreeSWITCH configuration
-(https://github.com/xlab1/freeswitch_conf_minimal) and a few additional
+(https://github.com/voxserv/freeswitch_conf_minimal) and a few additional
 scripts that I built when we needed to measure end-to-end QoS for voice
 communication. The same setup is used on the probe computers on both
 sides. The test script starts a 30-second SIP call between ports 5080 on
@@ -69,7 +69,7 @@ apt-get install -y freeswitch-meta-all
 # install the probe
 
 cd /etc
-git clone https://github.com/xlab1/voip_qos_probe.git freeswitch
+git clone https://github.com/voxserv/voip_qos_probe.git freeswitch
 
 insserv freeswitch
 service freeswitch start
